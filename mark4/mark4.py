@@ -25,6 +25,13 @@ puanlar=[]
 tarihler=[]
 sorular=[]
 
+
+urun_puani=None
+urun_degerlendirme_sayisi=None
+urun_soru_sayisi=None
+urun_ismi=None
+urun_fiyati=None
+
 urun_url=None
 degerlendirme_url=None
 soru_cevap_url=None
@@ -42,23 +49,57 @@ def driverOlustur():
     driver=webdriver.Chrome(service=service,options=options)
     return driver
 
-# def anaSayfayiAc(driver):
-#     driver.get(urun_url)
-#     time.sleep(2)
 
 def urlTopla():
     global driver
-    global degerlendirme_url  # Şunu eklemeniz şart!
+    global degerlendirme_url  
     global soru_cevap_url
     degerlendirme_url=driver.find_element(By.CLASS_NAME,"rvw-cnt").find_element(By.TAG_NAME,"a").get_attribute("href")
     soru_cevap_url=driver.find_element(By.CLASS_NAME,"product-questions").get_attribute("href")
-
+def urunBilgileriTopla():
+    global driver
+    global urun_ismi
+    global urun_fiyati
+    global urun_puani
+    global urun_degerlendirme_sayisi
+    global urun_soru_sayisi
+    html_doc=driver.page_source
+    soup=BeautifulSoup(html_doc,"html.parser")
+    urun_ismi=soup.select_one(".pr-new-br a").text.strip()+" "+soup.select_one(".pr-new-br span").text.strip()
+    urun_fiyati=soup.select_one(".pr-bx-nm.with-org-prc").select_one(".prc-dsc").text.strip()
+    urun_puani=soup.find(class_="value").text
+    urun_degerlendirme_sayisi=soup.select_one(".total-review-count").text
+    urun_soru_sayisi=soup.select_one(".answered-questions-count").text
+    
 
 def degerlendirmeSayfasi():
     global driver
     driver.get(degerlendirme_url)
     time.sleep(2)
-
+def yenidenEskiye():
+    driver.find_element(By.CLASS_NAME,"selected-container").click()
+    time.sleep(1)
+    
+    dropdownElements = driver.find_element(By.CLASS_NAME,"reviews-dropdown")
+    liElements = dropdownElements.find_elements(By.TAG_NAME, "li")
+ 
+    for li in liElements:
+        if(li.text.strip()=="Yeniden Eskiye"):
+            li.click()
+            break
+    time.sleep(2)  
+def eskidenYeniye():
+    driver.find_element(By.CLASS_NAME,"selected-container").click()
+    time.sleep(1)
+    
+    dropdownElements = driver.find_element(By.CLASS_NAME,"reviews-dropdown")
+    liElements = dropdownElements.find_elements(By.TAG_NAME, "li")
+ 
+    for li in liElements:
+        if(li.text.strip()=="Eskiden Yeniye"):
+            li.click()
+            break
+    time.sleep(2)
 def degerlendirmeListesiOlusturma():
     global driver
     degerlendirmeObjeleri.clear()
@@ -84,7 +125,6 @@ def degerlendirmeListesiOlusturma():
     html_doc=driver.page_source
     soup=BeautifulSoup(html_doc,"html.parser")
     degerlendirmeObjeleri.extend(soup.select(".reviews .comment"))
-
 def yorumListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
     comments=[]
 
@@ -93,7 +133,6 @@ def yorumListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
         comments.append(comment)
 
     return comments    
-
 def puanListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
     points=[]
     for degerlendirmeObjesi in degerlendirmeObjeleri:
@@ -108,11 +147,10 @@ def puanListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
         points.append(point)
 
     return points
-
 def tarihListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
     dates=[]
     for degerlendirmeObjesi in degerlendirmeObjeleri:
-        if(len(degerlendirmeObjesi.select_one(".comment-info").select(".comment-info-item"))==3):
+        if(degerlendirmeObjesi.select_one(".comment-info").select(".comment-info-item")[1].text.strip()=="Elite Üye"):
             date=degerlendirmeObjesi.select_one(".comment-info").select(".comment-info-item")[2].text
             dates.append(date)
         else:
@@ -124,9 +162,9 @@ def tarihListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
 def sorucevapSayfasi():
     driver.get(soru_cevap_url)
     time.sleep(2)
-
 def sorucevapListesiOlusturma():
     eski_sorucevap_sayisi = 0
+    sorucevapObjeleri.clear()
 
     while True:
         sorucevaplar = driver.find_elements(By.CLASS_NAME, "qna-item")
@@ -151,7 +189,6 @@ def sorucevapListesiOlusturma():
     html_doc=driver.page_source
     soup=BeautifulSoup(html_doc,"html.parser")
     sorucevapObjeleri.extend(soup.select(".qna-item"))
-
 def soruListesiOlusturma(sorucevapObjeleri:List[BeautifulSoup]):
     questions=[]
     for sorucevapObjesi in sorucevapObjeleri:
@@ -160,21 +197,29 @@ def soruListesiOlusturma(sorucevapObjeleri:List[BeautifulSoup]):
     return questions
 
 
-def dataFrameOlusturma(*args,tip="yorum"):
-    if tip=="yorum":
-        df=pd.DataFrame({
-            "yorumlar":yorumlar,
-            "puanlar":puanlar,
-            "tarihler":tarihler
-        })
-    elif tip=="soru":
-        df=pd.DataFrame({
-            "sorular":sorular
-        })
+def yorumDataFrameOlusturma(yorumlar,puanlar,tarihler):
+    df=pd.DataFrame({
+        "yorum":yorumlar,
+        "puan":puanlar,
+        "tarih":tarihler
+    })
+    df.index = df.index + 1
+    return df
+def soruDataFrameOlusturma(sorular):
+    df=pd.DataFrame({
+        "soru":sorular
+    })
+    df.index = df.index + 1
     return df
 
-def dfToExcel(df:pd.DataFrame,isim):
-    df.to_excel(f"{isim}.xlsx")
+
+def dfToExcel(df:pd.DataFrame,isim,sheet_name):
+    df.to_excel(f"{isim}.xlsx",sheet_name=sheet_name)
+def dfToExcelSheets(df1:pd.DataFrame,df2:pd.DataFrame,isim):
+    with pd.ExcelWriter(f"{isim}.xlsx") as writer:
+        df1.to_excel(writer,sheet_name="Yeniden Eskiye")
+        df2.to_excel(writer,sheet_name="Eskiden Yeniye")
+
 
 def streamlit_app():
     global urun_url
@@ -186,22 +231,35 @@ def streamlit_app():
     st.markdown("---")
     if "sayfa_secimi" not in st.session_state:
         st.session_state.sayfa_secimi = None
-        
+    if "filtre_secimi" not in st.session_state:
+        st.session_state.filtre_secimi = None
+    
 
     st.write("Lütfen işlem yapmak istediğiniz bölümü seçiniz:")
-    col1,colSpace,col2=st.columns([1,4,1])
+    col1,col2=st.columns(2)
     with col1:
-        if st.button("Ürün Yorumları", help="Bu buton ürün yorumlarını analiz etmek için kullanılır."):
+        if st.button("Ürün Yorumları", help="Bu buton ürün yorumlarını analiz etmek için kullanılır.",use_container_width=True):
             st.session_state.sayfa_secimi="yorum"
-    with colSpace:
-        st.write("")
     with col2:
-        if st.button("Soru Cevaplar", help="Bu buton ürün hakkındaki soru ve cevapları analiz etmek için kullanılır."):
+        if st.button("Soru Cevaplar", help="Bu buton ürün hakkındaki soru ve cevapları analiz etmek için kullanılır.",use_container_width=True):
             st.session_state.sayfa_secimi="soru_cevap"
     
-    st.markdown("---")  # Ayırıcı çizgi ekleyerek butonlar arasında boşluk oluşturur
+    st.write("Lütfen filtre seçimi yapınız:")
+    col1,col2,col3=st.columns([1,1,1])
+    with col1:
+        if st.button("Yeniden Eskiye",use_container_width=True):
+            st.session_state.filtre_secimi="yeniden_eskiye"
+    with col2:
+        if st.button("Eskiden Yeniye",use_container_width=True):
+            st.session_state.filtre_secimi="eskiden_yeniye"
     
-    if st.button("Analiz Et", key="analiz_et_button", use_container_width=True, type="primary"):
+    with col3:
+        if st.button("Hepsi",use_container_width=True):
+            st.session_state.filtre_secimi="hepsi"
+    st.markdown("---")
+
+
+    if st.button("Analiz Et",use_container_width=True,type="primary"):
         if url_input:
             urun_url = url_input
             st.success("URL başarıyla kaydedildi.")
@@ -209,28 +267,93 @@ def streamlit_app():
                 driverOlustur()
                 driver.get(urun_url)
                 time.sleep(2)
+                urunBilgileriTopla()
                 urlTopla()
-                if st.session_state.sayfa_secimi=="yorum":
-                    #start_time = time.time()
+                if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="yeniden_eskiye"):
                     degerlendirmeSayfasi()
+                    yenidenEskiye()
                     degerlendirmeListesiOlusturma()
-                    yorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
-                    puanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
-                    tarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
-                    df=dataFrameOlusturma(yorumlar,puanlar,tarihler)
-                    dfToExcel(df,dosya_adi)
+                    yeniYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
+                    yeniPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
+                    yeniTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
+                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler)
+                    dfToExcel(df1,dosya_adi,"Yeniden Eskiye Yorumlar")
                     driver.quit()
-                    #end_time = time.time()
-                    #execution_time = end_time - start_time
-                    #st.write(f"Analiz süresi: {execution_time:.2f} saniye")
-                if st.session_state.sayfa_secimi=="soru_cevap":
+                if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="eskiden_yeniye"):
+                    degerlendirmeSayfasi()
+                    eskidenYeniye()
+                    degerlendirmeListesiOlusturma()
+                    eskiYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
+                    eskiPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
+                    eskiTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
+                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler)
+                    dfToExcel(df2,dosya_adi,"Eskiden Yeniye Yorumlar")
+                    driver.quit()
+                if(st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="hepsi"):
+                    degerlendirmeSayfasi()
+                    yenidenEskiye()
+                    degerlendirmeListesiOlusturma()
+                    yeniYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
+                    yeniPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
+                    yeniTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
+                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler)
+                    driver.quit()
+                    driverOlustur()
+                    driver.get(degerlendirme_url)
+                    time.sleep(2)
+                    eskidenYeniye()
+                    degerlendirmeListesiOlusturma()
+                    eskiYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
+                    eskiPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
+                    eskiTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
+                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler)
+                    dfToExcelSheets(df1,df2,dosya_adi)
+                    driver.quit()
+                
+
+                if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="yeniden_eskiye"):
                     sorucevapSayfasi()
+                    yenidenEskiye()
                     sorucevapListesiOlusturma()
                     sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
-                    df=dataFrameOlusturma(sorular,tip="soru")
-                    dfToExcel(df,dosya_adi)
+                    df=soruDataFrameOlusturma(sorular)
+                    dfToExcel(df,dosya_adi,"Sorular")
                     driver.quit()
+
+                if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="eskiden_yeniye"):
+                    sorucevapSayfasi()
+                    eskidenYeniye()
+                    sorucevapListesiOlusturma()
+                    sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
+                    df=soruDataFrameOlusturma(sorular)
+                    dfToExcel(df,dosya_adi,"Sorular")
+                    driver.quit()
+
+                if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="hepsi"):
+                    sorucevapSayfasi()
+                    yenidenEskiye()
+                    sorucevapListesiOlusturma()
+                    sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
+                    df1=soruDataFrameOlusturma(sorular)
+                    sorular.clear()
+                    driver.quit()
+                    driverOlustur()
+                    driver.get(soru_cevap_url)
+                    time.sleep(2)
+                    eskidenYeniye()
+                    sorucevapListesiOlusturma()
+                    sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
+                    df2=soruDataFrameOlusturma(sorular)
+                    dfToExcelSheets(df1,df2,dosya_adi)
+                    driver.quit()
+                    
+                    
             st.success("Analiz tamamlandı!")
+            print(f"urun ismi: {urun_ismi}")
+            print(f"urun fiyati: {urun_fiyati}")
+            print(f"urun puanı: {urun_puani}")
+            print(f"urun degerlendirme sayisi: {urun_degerlendirme_sayisi}")
+            print(f"urun soru sayisi: {urun_soru_sayisi}")
         
         else:
             st.error("Lütfen geçerli bir URL giriniz!")
