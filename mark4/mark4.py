@@ -20,18 +20,21 @@ eskiYorumlar=[]
 eskiTarihler=[]
 eskiPuanlar=[]
 
+
 yorumlar=[]
 puanlar=[]
 tarihler=[]
 sorular=[]
-
+bilgiler_listesi=[]
+urun_ozellikleri=[]
 
 urun_puani=None
 urun_degerlendirme_sayisi=None
 urun_soru_sayisi=None
+urun_yorum_sayisi=None
 urun_ismi=None
 urun_fiyati=None
-
+urun_bilgileri=[]
 urun_url=None
 degerlendirme_url=None
 soru_cevap_url=None
@@ -56,6 +59,7 @@ def urlTopla():
     global soru_cevap_url
     degerlendirme_url=driver.find_element(By.CLASS_NAME,"rvw-cnt").find_element(By.TAG_NAME,"a").get_attribute("href")
     soru_cevap_url=driver.find_element(By.CLASS_NAME,"product-questions").get_attribute("href")
+
 def urunBilgileriTopla():
     global driver
     global urun_ismi
@@ -63,13 +67,42 @@ def urunBilgileriTopla():
     global urun_puani
     global urun_degerlendirme_sayisi
     global urun_soru_sayisi
+    global urun_bilgileri
+    global urun_yorum_sayisi
+    global urun_ozellikleri
+    urun_ozellikleri2=[]
+    urun_bilgileri2=[]
+    
     html_doc=driver.page_source
     soup=BeautifulSoup(html_doc,"html.parser")
-    urun_ismi=soup.select_one(".pr-new-br a").text.strip()+" "+soup.select_one(".pr-new-br span").text.strip()
+    if len(soup.select(".pr-new-br span"))>1:
+        urun_ismi=soup.select(".pr-new-br span")[0].text.strip()+" "+soup.select(".pr-new-br span")[1].text.strip()
+    else:
+        urun_ismi=soup.select_one(".product-brand-name-with-link").text.strip()+" "+soup.select(".pr-new-br span")[0].text.strip()
+
     urun_fiyati=soup.select_one(".pr-bx-nm.with-org-prc").select_one(".prc-dsc").text.strip()
     urun_puani=soup.find(class_="value").text
-    urun_degerlendirme_sayisi=soup.select_one(".total-review-count").text
-    urun_soru_sayisi=soup.select_one(".answered-questions-count").text
+    urun_degerlendirme_sayisi=int(soup.select_one(".total-review-count").text)
+    urun_yorum_sayisi=int(soup.select_one(".p-reviews-comment-count").text.split(" ")[0])
+    urun_soru_sayisi=int(soup.select_one(".answered-questions-count").text)
+
+    urun_bilgi_bolumu=soup.select_one(".detail-desc-list").select("li")[5:]
+    for urun_bilgi in urun_bilgi_bolumu:
+        urun_bilgi_yazisi=urun_bilgi.text
+        urun_bilgileri2.append(urun_bilgi_yazisi)
+    urun_bilgileri.append("-".join(urun_bilgileri2))
+
+    urunOzellikleri=soup.select(".detail-attr-container .detail-attr-item")
+    for urunOzelligi in urunOzellikleri:
+        keydegeri=urunOzelligi.select_one(".attr-name.attr-key-name-w")
+        valueDegeri=urunOzelligi.select_one("span[title]")
+        if keydegeri and valueDegeri:
+            keydegeri = keydegeri.string.strip()
+            valueDegeri = valueDegeri.get("title").strip()
+            urun_ozellikleri2.append(f"{keydegeri}:{valueDegeri}")
+    urun_ozellikleri.append(" - ".join(urun_ozellikleri2))
+    
+
     
 
 def degerlendirmeSayfasi():
@@ -157,6 +190,31 @@ def tarihListesiOlusturma(degerlendirmeObjeleri:List[BeautifulSoup]):
             date=degerlendirmeObjesi.select_one(".comment-info").select(".comment-info-item")[1].text
             dates.append(date)
     return dates
+def bedenBoyKilo(degerlendirmeObjeleri:List[BeautifulSoup]):
+    global bilgiler_listesi
+    bilgiler_listesi.clear()
+    for degerlendirmeObjesi in degerlendirmeObjeleri:
+        bilgiler={"boy":None,"kilo":None,"beden":None}
+        comment_info_items=degerlendirmeObjesi.select(".comment-info-item")
+        for item in comment_info_items:
+            b_tag=item.find("b")
+            if b_tag:
+                label=b_tag.get_text(strip=True).lower()
+
+                if b_tag.next_sibling:
+                    value = b_tag.next_sibling.strip()
+                else:
+                    value = None
+
+                if "beden" in label:
+                    bilgiler["beden"] = value
+                elif "boy" in label:
+                    bilgiler["boy"] = value
+                elif "kilo" in label:
+                    bilgiler["kilo"] = value            
+        bilgiler_listesi.append(bilgiler)
+
+
 
 
 def sorucevapSayfasi():
@@ -197,11 +255,12 @@ def soruListesiOlusturma(sorucevapObjeleri:List[BeautifulSoup]):
     return questions
 
 
-def yorumDataFrameOlusturma(yorumlar,puanlar,tarihler):
+def yorumDataFrameOlusturma(yorumlar,puanlar,tarihler,bilgiler_listesi):
     df=pd.DataFrame({
         "yorum":yorumlar,
         "puan":puanlar,
-        "tarih":tarihler
+        "tarih":tarihler,
+        "boy-kilo-beden":bilgiler_listesi
     })
     df.index = df.index + 1
     return df
@@ -211,10 +270,22 @@ def soruDataFrameOlusturma(sorular):
     })
     df.index = df.index + 1
     return df
-
+def bilgiDataFrameOlusturma(urun_ismi,urun_fiyati,urun_puani,urun_degerlendirme_sayisi,urun_yorum_sayisi,urun_soru_sayisi,urun_bilgileri,urun_ozellikleri):
+    df=pd.DataFrame({
+        "ürün ismi":urun_ismi,
+        "ürün fiyatı":urun_fiyati,
+        "ürün puanı":urun_puani,
+        "ürün değerlendirme sayısı":urun_degerlendirme_sayisi,
+        "ürün yorum sayısı":urun_yorum_sayisi,
+        "ürün soru sayısı":urun_soru_sayisi,
+        "ürün bilgileri":urun_bilgileri,
+        "ürün özellikleri":urun_ozellikleri
+    })
+    df.index = df.index + 1
+    return df
 
 def dfToExcel(df:pd.DataFrame,isim,sheet_name):
-    df.to_excel(f"{isim}.xlsx",sheet_name=sheet_name)
+    df.to_excel(f"{isim}.xlsx",sheet_name=sheet_name)    
 def dfToExcelSheets(df1:pd.DataFrame,df2:pd.DataFrame,isim):
     with pd.ExcelWriter(f"{isim}.xlsx") as writer:
         df1.to_excel(writer,sheet_name="Yeniden Eskiye")
@@ -222,12 +293,20 @@ def dfToExcelSheets(df1:pd.DataFrame,df2:pd.DataFrame,isim):
 
 
 def streamlit_app():
+    global urun_ismi
+    global urun_fiyati
+    global urun_puani
+    global urun_degerlendirme_sayisi
+    global urun_yorum_sayisi
+    global urun_soru_sayisi
+    global urun_bilgileri
     global urun_url
     global driver
-    st.title("Ürün Analizi")
+    st.image("logo.jpg")
+    st.title("Trendyol Ürün Analizi")
         
     url_input = st.text_input("Lütfen analiz etmek istediğiniz ürünün linkini giriniz:")
-    dosya_adi = st.text_input("Lütfen dosyanızın adını giriniz:")
+    dosya_adi = st.text_input("Dosyanızı hangi isimle kayıt etmek istersiniz ?")
     st.markdown("---")
     if "sayfa_secimi" not in st.session_state:
         st.session_state.sayfa_secimi = None
@@ -235,13 +314,13 @@ def streamlit_app():
         st.session_state.filtre_secimi = None
     
 
-    st.write("Lütfen işlem yapmak istediğiniz bölümü seçiniz:")
+    st.write("Lütfen yapmak istediğiniz işlemi seçiniz:")
     col1,col2=st.columns(2)
     with col1:
-        if st.button("Ürün Yorumları", help="Bu buton ürün yorumlarını analiz etmek için kullanılır.",use_container_width=True):
+        if st.button("Ürün Yorumları",use_container_width=True):
             st.session_state.sayfa_secimi="yorum"
     with col2:
-        if st.button("Soru Cevaplar", help="Bu buton ürün hakkındaki soru ve cevapları analiz etmek için kullanılır.",use_container_width=True):
+        if st.button("Soru Cevaplar",use_container_width=True):
             st.session_state.sayfa_secimi="soru_cevap"
     
     st.write("Lütfen filtre seçimi yapınız:")
@@ -269,67 +348,111 @@ def streamlit_app():
                 time.sleep(2)
                 urunBilgileriTopla()
                 urlTopla()
+                bilgi_df=bilgiDataFrameOlusturma(urun_ismi,urun_fiyati,urun_puani,urun_degerlendirme_sayisi,urun_yorum_sayisi,urun_soru_sayisi,urun_bilgileri,urun_ozellikleri)
+                
                 if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="yeniden_eskiye"):
+                    if(int(urun_yorum_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_yorum_sayisi)//10)*1.35:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 420 saniye")
                     degerlendirmeSayfasi()
                     yenidenEskiye()
                     degerlendirmeListesiOlusturma()
+                    bedenBoyKilo(degerlendirmeObjeleri)
                     yeniYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
                     yeniPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
                     yeniTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
-                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler)
-                    dfToExcel(df1,dosya_adi,"Yeniden Eskiye Yorumlar")
+                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler,bilgiler_listesi)
+                    
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df1.to_excel(writer, sheet_name="Yeniden Eskiye Yorumlar")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
+                    
                 if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="eskiden_yeniye"):
+                    if(int(urun_yorum_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_yorum_sayisi)//10)*1.35:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 420 saniye")
                     degerlendirmeSayfasi()
                     eskidenYeniye()
                     degerlendirmeListesiOlusturma()
+                    bedenBoyKilo(degerlendirmeObjeleri)
                     eskiYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
                     eskiPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
                     eskiTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
-                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler)
-                    dfToExcel(df2,dosya_adi,"Eskiden Yeniye Yorumlar")
+                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler,bilgiler_listesi)
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df2.to_excel(writer, sheet_name="Eskiden Yeniye Yorumlar")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
+
                 if(st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="hepsi"):
+                    if(int(urun_yorum_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_yorum_sayisi)//10)*2.7:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 840 saniye")
                     degerlendirmeSayfasi()
                     yenidenEskiye()
                     degerlendirmeListesiOlusturma()
+                    bedenBoyKilo(degerlendirmeObjeleri)
                     yeniYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
                     yeniPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
                     yeniTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
-                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler)
+                    df1=yorumDataFrameOlusturma(yeniYorumlar,yeniPuanlar,yeniTarihler,bilgiler_listesi)
                     driver.quit()
                     driverOlustur()
                     driver.get(degerlendirme_url)
                     time.sleep(2)
                     eskidenYeniye()
                     degerlendirmeListesiOlusturma()
+                    bedenBoyKilo(degerlendirmeObjeleri)
                     eskiYorumlar.extend(yorumListesiOlusturma(degerlendirmeObjeleri))
                     eskiPuanlar.extend(puanListesiOlusturma(degerlendirmeObjeleri))
                     eskiTarihler.extend(tarihListesiOlusturma(degerlendirmeObjeleri))
-                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler)
-                    dfToExcelSheets(df1,df2,dosya_adi)
+                    df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler,bilgiler_listesi)
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df1.to_excel(writer, sheet_name="Yeniden Eskiye Yorumlar")
+                        df2.to_excel(writer, sheet_name="Eskiden Yeniye Yorumlar")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
                 
 
                 if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="yeniden_eskiye"):
+                    if(int(urun_soru_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_soru_sayisi)//10)*1.35:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 420 saniye")
                     sorucevapSayfasi()
                     yenidenEskiye()
                     sorucevapListesiOlusturma()
                     sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
                     df=soruDataFrameOlusturma(sorular)
-                    dfToExcel(df,dosya_adi,"Sorular")
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df.to_excel(writer, sheet_name="Sorular")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
 
                 if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="eskiden_yeniye"):
+                    if(int(urun_soru_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_soru_sayisi)//10)*1.35:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 420 saniye")
                     sorucevapSayfasi()
                     eskidenYeniye()
                     sorucevapListesiOlusturma()
                     sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
                     df=soruDataFrameOlusturma(sorular)
-                    dfToExcel(df,dosya_adi,"Sorular")
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df.to_excel(writer, sheet_name="Sorular")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
 
                 if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="hepsi"):
+                    if(int(urun_soru_sayisi)<=3030):
+                        st.write(f"tahmini bekleme süreniz: {(int(urun_soru_sayisi)//10)*2.7:.0f} saniye")
+                    else:
+                        st.write(f"tahmini bekleme süreniz: 840 saniye")
                     sorucevapSayfasi()
                     yenidenEskiye()
                     sorucevapListesiOlusturma()
@@ -344,17 +467,12 @@ def streamlit_app():
                     sorucevapListesiOlusturma()
                     sorular.extend(soruListesiOlusturma(sorucevapObjeleri))
                     df2=soruDataFrameOlusturma(sorular)
-                    dfToExcelSheets(df1,df2,dosya_adi)
+                    with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
+                        df1.to_excel(writer, sheet_name="Yeniden Eskiye Sorular")
+                        df2.to_excel(writer, sheet_name="Eskiden Yeniye Sorular")
+                        bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                     driver.quit()
-                    
-                    
-            st.success("Analiz tamamlandı!")
-            print(f"urun ismi: {urun_ismi}")
-            print(f"urun fiyati: {urun_fiyati}")
-            print(f"urun puanı: {urun_puani}")
-            print(f"urun degerlendirme sayisi: {urun_degerlendirme_sayisi}")
-            print(f"urun soru sayisi: {urun_soru_sayisi}")
-        
+
         else:
             st.error("Lütfen geçerli bir URL giriniz!")
 
