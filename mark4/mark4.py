@@ -243,8 +243,8 @@ def sorucevapListesiOlusturma():
         time.sleep(1.5)
 
         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
-        # driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
-        # driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)    
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)    
         time.sleep(1.5)
 
 
@@ -494,6 +494,20 @@ def streamlit_app():
 
         st.title("Veri Analizi")
         yuklenmis_dosya=st.file_uploader("Excel dosyasını yükleyiniz",type=["xlsx"])
+        sablon_df = pd.DataFrame(columns=["yorum", "puan", "tarih", "boy-kilo-beden"])
+
+        sablon_df.index=sablon_df.index+1
+
+        excel_buffer = io.BytesIO()
+        sablon_df.to_excel(excel_buffer, index=True)
+        excel_buffer.seek(0)
+        if yuklenmis_dosya is None:
+            st.download_button(
+                label="Örnek excel şablonunu indir",
+                data=excel_buffer,
+                file_name=f"uygun_sablon.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
         if yuklenmis_dosya is not None:
             df=pd.read_excel(yuklenmis_dosya)
@@ -507,7 +521,7 @@ def streamlit_app():
 
                 if "llmmodeli" not in st.session_state:
                     st.session_state.llmmodeli=None
-                st.write("Model secimi yapin:")
+                st.write("Model seçimi yapın:")
                 col1,col2=st.columns(2)
                 with col1:
                     if st.button("OpenAI"):
@@ -523,7 +537,7 @@ def streamlit_app():
                     kullaniciAPIKey=st.text_input("API Key: ")
                     client = OpenAI(
                         #api_key=kullaniciAPIKey
-                        api_key="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"
+                        api_key=kullaniciAPIKey
                         )
                     kullaniciPromptu=st.text_area("Prompt:")
 
@@ -553,38 +567,79 @@ def streamlit_app():
                             aiYorumAnalizleriOnizleme.append(response)
                             
                         onizlemeDF=pd.DataFrame({
-                            "Yorum":onizlemeYapilacakYorumlar,
-                            "Analiz Edilmiș Yorum":aiYorumAnalizleriOnizleme
+                            "Veri":onizlemeYapilacakYorumlar,
+                            "İșlenmiş Veri":aiYorumAnalizleriOnizleme
                         })
                         outputTokeni=(sum(len(enc.encode(output)) for output in aiYorumAnalizleriOnizleme))//6
                         toplamOpenAIOutputTokeni=outputTokeni*yorumSayisi
+                        st.session_state.toplamOpenAIInputTokeni = toplamOpenAIInputTokeni
+                        st.session_state.toplamOpenAIOutputTokeni = toplamOpenAIOutputTokeni
                         st.table(onizlemeDF)
-                        st.write(f"toplam input tokeni:{toplamOpenAIInputTokeni}")
-                        st.write(f"toplam outout tokeni:{toplamOpenAIOutputTokeni}")
 
 
+                    if "toplamOpenAIInputTokeni" in st.session_state and "toplamOpenAIOutputTokeni" in st.session_state:
+                        st.write(f"Maksimum kullanılacak input tokeni: {st.session_state.toplamOpenAIInputTokeni}")
+                        st.write(f"Maksimum kullanılacak output tokeni: {st.session_state.toplamOpenAIOutputTokeni}")
 
-                    if st.button("Analiz Et"):
-                        for analizEdilecekYorum in analizEdilecekYorumlar:
-                            full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
+                    if "analizHazir" not in st.session_state:
+                        st.session_state.analizHazir=False
+                    
+
+                    if st.button("Analiz"):
+                        st.session_state.analizHazir=True
+
+                    if st.session_state.analizHazir:
+                        
+                        analizSayisi=st.text_input("Kaç yorum analiz edilsin ? (Bir şey yazmazsanız hepsi analiz edilecektir)")
+                        if st.button("Analiz Et"):
+                            if analizSayisi:
+                                analizSayisi=int(analizSayisi)
+                                yeniAnalizEdilecekYorumlar=analizEdilecekYorumlar[:analizSayisi]
+                                yeniDF=df.iloc[:analizSayisi].copy()
+                                for analizEdilecekYorum in yeniAnalizEdilecekYorumlar:
+                                    full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
+                                    
+
+                                    completion = client.chat.completions.create(
+                                        model="gpt-4o-mini",
+                                        messages=[{"role": "user", "content": full_prompt}]
+                                    )
+
+                                    response=completion.choices[0].message.content
+                                    aiYorumAnalizleri.append(response)
+                                 
+                                yeniDF["Yapay Zeka Yorumu"]=aiYorumAnalizleri
+                                if "Unnamed: 0" in yeniDF.columns:
+                                    yeniDF = yeniDF.drop(columns=["Unnamed: 0"])
+                                yeniDF.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=True)
+                                st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
+
+                            else:
+                                for analizEdilecekYorum in analizEdilecekYorumlar:
+                                    full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
+                                    
+
+                                    completion = client.chat.completions.create(
+                                        model="gpt-4o-mini",
+                                        messages=[{"role": "user", "content": full_prompt}]
+                                    )
+
+                                    response=completion.choices[0].message.content
+                                    aiYorumAnalizleri.append(response)
+                                df["Yapay Zeka Yorumu"]=aiYorumAnalizleri
+                                df.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=False)
+                                st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
+
                             
 
-                            completion = client.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[{"role": "user", "content": full_prompt}]
-                            )
 
-                            response=completion.choices[0].message.content
-                            aiYorumAnalizleri.append(response)
-                        df["Yapay Zeka Yorumu"]=aiYorumAnalizleri
-                        df.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=False)
-                        st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
+                        
 
 
                 if st.session_state.llmmodeli=="gemini":
-                    genai.configure(api_key="AIzaSyCwNRz5SlophCp5vW9idXQoCtXeE1WYneA")
-                    model=genai.GenerativeModel("gemini-2.0-flash-lite")
                     kullaniciAPIKey=st.text_input("API Key: ")
+                    genai.configure(api_key="kullaniciAPIKey")
+                    model=genai.GenerativeModel("gemini-2.0-flash-lite")
                     kullaniciPromptu=st.text_area("Prompt:")
 
                     #token hesabi
@@ -608,32 +663,59 @@ def streamlit_app():
                             aiYorumAnalizleriOnizleme.append(response)
 
                         onizlemeDF=pd.DataFrame({
-                            "Yorum":onizlemeYapilacakYorumlar,
-                            "Analiz Edilmiș Yorum":aiYorumAnalizleriOnizleme
+                            "Veri":onizlemeYapilacakYorumlar,
+                            "İșlenmiş Veri":aiYorumAnalizleriOnizleme
                         })
                         outputTokeni=(sum(len(enc.encode(output)) for output in aiYorumAnalizleriOnizleme))//6
                         toplamOpenAIOutputTokeni=outputTokeni*yorumSayisi
                         st.table(onizlemeDF)
-                        st.write(f"toplam input tokeni:{toplamOpenAIInputTokeni*1.25:.0f}")
-                        st.write(f"toplam outout tokeni:{toplamOpenAIOutputTokeni*1.25:.0f}")
+                        st.session_state.toplamGeminiInputTokeni = toplamOpenAIInputTokeni*1.25
+                        st.session_state.toplamGeminiOutputTokeni = toplamOpenAIOutputTokeni*1.25
 
-                    if st.button("Analiz Et"):
-                        for analizEdilecekYorum in analizEdilecekYorumlar:
-                            full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
-                            response=model.generate_content(full_prompt)
-                            response=response.text
-                            aiYorumAnalizleri.append(response)
+                    if "toplamGeminiInputTokeni" in st.session_state and "toplamGeminiOutputTokeni" in st.session_state:
+                        st.write(f"Maksimum kullanılacak input tokeni: {st.session_state.toplamGeminiInputTokeni:.0f}")
+                        st.write(f"Maksimum kullanılacak output tokeni: {st.session_state.toplamGeminiOutputTokeni:.0f}")
 
-                            
-                        df["Yapay Zeka Yorumu"]=aiYorumAnalizleri
-                        df.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=False)
-                        st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
+                    if "analizHazir" not in st.session_state:
+                        st.session_state.analizHazir=False
+
+                    if st.button("Analiz"):
+                        st.session_state.analizHazir=True
+
+                    if st.session_state.analizHazir:
+                        analizSayisi=st.text_input("Kaç yorum analiz edilsin ? (Bir şey yazmazsanız hepsi analiz edilecektir)")
+                        if st.button("Analiz Et"):
+                            if analizSayisi:
+                                analizSayisi=int(analizSayisi)
+                                yeniAnalizEdilecekYorumlar=analizEdilecekYorumlar[:analizSayisi]
+                                yeniDF=df.iloc[:analizSayisi].copy()
+                                for analizEdilecekYorum in yeniAnalizEdilecekYorumlar:
+                                    full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
+                                    response=model.generate_content(full_prompt)
+                                    response=response.text
+                                    aiYorumAnalizleri.append(response)
+                                 
+                                yeniDF["Yapay Zeka Yorumu"]=aiYorumAnalizleri
+                                if "Unnamed: 0" in yeniDF.columns:
+                                    yeniDF = yeniDF.drop(columns=["Unnamed: 0"])
+                                yeniDF.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=True)
+                                st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
+
+                            else:
+                                for analizEdilecekYorum in analizEdilecekYorumlar:
+                                    full_prompt=f"Yorum: {analizEdilecekYorum}\n\n{kullaniciPromptu}"
+                                    response=model.generate_content(full_prompt)
+                                    response=response.text
+                                    aiYorumAnalizleri.append(response)
+                                df["Yapay Zeka Yorumu"]=aiYorumAnalizleri
+                                df.to_excel(f"{yuklenmis_dosya.name[:-5]}_v2.xlsx", index=False)
+                                st.success("Güncellenmiş Excel dosyası başarıyla oluşturuldu")
             
             
             
             
             else:
-                st.error("Excel dosyanız uygun formatta degildir asagidaki sablonu indirip verilerinizi aktariniz")
+                st.error("Excel dosyanız uygun formatta değildir. Aşağıdaki şablonu indirip verilerinizi aktarınız.")
 
                 sablon_df = pd.DataFrame(columns=["yorum", "puan", "tarih", "boy-kilo-beden"])
 
@@ -644,12 +726,11 @@ def streamlit_app():
                 excel_buffer.seek(0)
 
                 st.download_button(
-                    label="Excel sablonunu indir",
+                    label="Örnek excel şablonunu indir",
                     data=excel_buffer,
                     file_name=f"uygun_sablon.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
+                )      
     with tab3:
         pass
 
