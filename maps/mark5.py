@@ -17,6 +17,20 @@ import io
 
 chrome_driver_path="/Users/erenates/Drivers/chromedriver"
 html_doc=None
+maps_html_doc=None
+yorum_cekilecek_yer=None
+maps_degerlendirme_objeleri:List[BeautifulSoup]=[]
+maps_filtrelenmemis_degerlendirme_objeleri:List[BeautifulSoup]=[]
+maps_soru_cevap_objeleri:List[BeautifulSoup]=[]
+maps_sorular=[]
+maps_cevaplar=[]
+maps_degerlendirme_yorumlari=[]
+maps_degerlendirme_puanlari=[]
+maps_degerlendirme_yanitlari=[]
+maps_degerlendirme_isimleri=[]
+maps_degerlendirme_tarihleri=[]
+maps_sorular=[]
+maps_cevaplar=[]
 
 yeniYorumlar=[]
 yeniTarihler=[]
@@ -296,6 +310,147 @@ def dfToExcelSheets(df1:pd.DataFrame,df2:pd.DataFrame,isim):
         df2.to_excel(writer,sheet_name="Eskiden Yeniye")
 
 
+#maps fonksiyonları
+def mapsDriverOlustur():
+    global driver
+    service=Service(chrome_driver_path)
+    options=Options()
+    options.add_experimental_option("detach",True)
+    driver=webdriver.Chrome(service=service,options=options)
+    return driver   
+
+def mapsDriverOlusturSC():
+    global driver
+    service=Service(chrome_driver_path)
+    options=Options()
+    options.add_experimental_option("detach",True)
+    driver=webdriver.Chrome(service=service,options=options)
+    driver.get(yorum_cekilecek_yer)
+    time.sleep(3)
+    return driver  
+     
+def mapsDegerlendirmeYukleme():
+    eski_degerlendirme_sayisi=0
+    driver.get(yorum_cekilecek_yer)
+    time.sleep(1)
+    driver.find_elements(By.CSS_SELECTOR, ".hh2c6")[1].click()
+    time.sleep(1)
+    #istedigimiz yerin yorumlar bolumundeyiz suan
+    scroll_div = driver.find_element(By.CSS_SELECTOR, ".m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde")
+
+    while True:
+        degerlendirmeler=driver.find_elements(By.CSS_SELECTOR,".jftiEf.fontBodyMedium")
+        yeni_degerlendirme_sayisi=len(degerlendirmeler)
+
+        if eski_degerlendirme_sayisi==yeni_degerlendirme_sayisi:
+            break
+
+        eski_degerlendirme_sayisi=yeni_degerlendirme_sayisi
+        scroll_div.send_keys(Keys.END)
+        time.sleep(1.75)
+
+    #yuklenen butun yorumlarin daha falza tusuna bastirmak gerekiyor
+    butonlar=driver.find_elements(By.CSS_SELECTOR, ".w8nwRe.kyuRq")
+    for buton in butonlar:
+        driver.execute_script("arguments[0].click();", buton) #ekranda olmayan butonlarada click yapabilir
+        
+    html_doc=driver.page_source
+    soup=BeautifulSoup(html_doc,"html.parser")
+    maps_filtrelenmemis_degerlendirme_objeleri.extend(soup.select(".jftiEf.fontBodyMedium"))
+    
+    for x in maps_filtrelenmemis_degerlendirme_objeleri:
+        if x.select_one(".MyEned .wiI7pd"):
+            maps_degerlendirme_objeleri.append(x)
+    #degerlendirme_objeleri isimli listede suan butun degerlendirmeler var, icinden gerekli bilgiler cekilecek
+
+def mapsYorumlariYuklemek():
+    for degerlendirme_objesi in maps_degerlendirme_objeleri:
+        degerlendirme_yorumu=degerlendirme_objesi.select_one(".MyEned .wiI7pd")
+        if degerlendirme_yorumu:
+            degerlendirme_yorumu=degerlendirme_yorumu.text
+        else:
+            degerlendirme_yorumu="None"
+        maps_degerlendirme_yorumlari.append(degerlendirme_yorumu)
+    #eger yorum yoksa None yazdirmasini soyledik, yorum varsada yorumu cekiyor
+
+def mapsYanitlariYuklemek():
+    for degerlendirme_objesi in maps_degerlendirme_objeleri:
+        degerlendirme_yaniti=degerlendirme_objesi.select_one(".CDe7pd .wiI7pd")
+        if degerlendirme_yaniti:
+            degerlendirme_yaniti=degerlendirme_yaniti.text
+        else:
+            degerlendirme_yaniti='None'
+        maps_degerlendirme_yanitlari.append(degerlendirme_yaniti)
+    #eger yanit yoksa None yazdirmasini soyledik, yanit varsada yorumu cekiyor
+
+def mapsPuanlariYuklemek():
+    for degerlendirme_objesi in maps_degerlendirme_objeleri:
+        puan=degerlendirme_objesi.select_one(".kvMYJc")["aria-label"]
+        maps_degerlendirme_puanlari.append(puan)
+        
+def mapsIsimleriYuklemek():
+    for degerlendirmeobjesi in maps_degerlendirme_objeleri:
+        degerlendirme_isimi=degerlendirmeobjesi.select_one(".d4r55").text
+        maps_degerlendirme_isimleri.append(degerlendirme_isimi)
+
+def mapsGuneCevir(metin):
+    if "yıl" in metin:
+        sayi = int(metin.split()[0])
+        return sayi * 365
+    
+    elif "ay" in metin:
+        sayi = int(metin.split()[0])
+        return sayi * 30
+    
+    elif "hafta" in metin:
+        sayi = int(metin.split()[0])
+        return sayi * 7
+    
+    elif "gün" in metin:
+        sayi = int(metin.split()[0])
+        return sayi
+    
+    elif "saat" in metin:
+        return 1
+      
+    elif "dakika" in metin:
+        return 1 
+    
+def mapsTarihleriYuklemek():
+    for degerlendirmeobjesi in maps_degerlendirme_objeleri:
+        degerlendirme_tarihi=degerlendirmeobjesi.select_one(".rsqaWe").text
+        if degerlendirme_tarihi.lower().startswith("bir"):
+            degerlendirme_tarihi = degerlendirme_tarihi.replace("bir", "1")
+        gun=mapsGuneCevir(degerlendirme_tarihi)
+        yeni_degerlendirme_tarihi=f'{gun} gün önce'
+        maps_degerlendirme_tarihleri.append(yeni_degerlendirme_tarihi)
+
+def mapsSoruCevapYuklemek():
+    driver.find_elements(By.CSS_SELECTOR, ".hh2c6")[1].click()
+    time.sleep(1)
+    driver.find_elements(By.CSS_SELECTOR, ".hh2c6")[0].click()
+    time.sleep(1)
+    driver.find_element(By.CSS_SELECTOR, "button[aria-label='Diğer sorular']").click()
+    time.sleep(1)
+
+    soru_cevap_html_doc=driver.page_source
+    soup=BeautifulSoup(soru_cevap_html_doc,"html.parser")
+
+    maps_soru_cevap_objeleri.extend(soup.select(".Wde6Oe"))
+    for soru_cevap_objesi in maps_soru_cevap_objeleri:
+        soru=soru_cevap_objesi.select_one(".NXtIPd").text
+        cevap=soru_cevap_objesi.select_one(".Uz0Pqe").text
+        maps_sorular.append(soru)
+        maps_cevaplar.append(cevap)
+    st.write(len(maps_soru_cevap_objeleri))
+    
+    
+
+
+
+    
+
+
 def streamlit_app():
     global urun_ismi
     global urun_fiyati
@@ -307,9 +462,9 @@ def streamlit_app():
     global urun_url
     global driver
     st.image("logo.jpg")
-    tab1,tab2,tab3=st.tabs(["Veri Çekimi","Veri Analizi","Veri Raporlama"])
+    tab1,tab2,tab3=st.tabs(["Trendyol Veri Çekimi","Veri Analizi","Google Maps Veri Çekimi"])
     with tab1:
-        st.title("Veri Çekimi")
+        st.title("Trendyol Veri Çekimi")
         url_input = st.text_input("Lütfen analiz etmek istediğiniz ürünün linkini giriniz:")
         dosya_adi = st.text_input("Dosyanızı hangi isimle kayıt etmek istersiniz ?")
         st.markdown("---")
@@ -343,7 +498,7 @@ def streamlit_app():
         st.markdown("---")
 
 
-        if st.button("Analiz Et",use_container_width=True,type="primary"):
+        if st.button("Veri Çekimini Başlat",use_container_width=True,type="primary"):
             if url_input:
                 urun_url = url_input
                 st.success("URL başarıyla kaydedildi.")
@@ -732,6 +887,46 @@ def streamlit_app():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )      
     with tab3:
-        pass
+        global yorum_cekilecek_yer
+        st.title("Google Maps Veri Çekimi")
+        yorum_cekilecek_yer = st.text_input("Lütfen analiz etmek istediğiniz yerin linkini giriniz:")
+        maps_dosya_adi = st.text_input("Dosyanızı hangi isimle kayıt etmek istersiniz ?", key="dosya_kayit_adi")
+        st.markdown("---")
+        if st.button("Veri Çekimini Başlat", key="maps_analiz_buton",use_container_width=True, type="primary"):
+
+            with st.spinner("Analiz Ediliyor"):
+                # mapsDriverOlusturSC()
+                # time.sleep(2)
+                # mapsSoruCevapYuklemek()
+                # driver.quit()
+
+                mapsDriverOlustur()
+                mapsDegerlendirmeYukleme()
+                mapsYorumlariYuklemek()
+                mapsPuanlariYuklemek()
+                mapsYanitlariYuklemek()
+                mapsIsimleriYuklemek()
+                mapsTarihleriYuklemek()
+                driver.quit()
+
+                st.success(f"Çekim başarılı şekilde tamamlanmıştır, toplam çekilen değerlendirme sayısı:{len(maps_filtrelenmemis_degerlendirme_objeleri) }, Yorumlu değerlendirme sayısı: {len(maps_degerlendirme_objeleri)}")
+
+                # simdi excel sablonu olusturayim 
+                df_degerlendirmeler = pd.DataFrame({
+                "İsim": maps_degerlendirme_isimleri,
+                "Puan": maps_degerlendirme_puanlari,
+                "Yorum": maps_degerlendirme_yorumlari,
+                "Yanıt": maps_degerlendirme_yanitlari,
+                "Tarih": maps_degerlendirme_tarihleri
+                })
+
+                # df_soru_cevaplar = pd.DataFrame({
+                # "Soru": maps_sorular,
+                # "Cevap": maps_cevaplar
+                # })
+                with pd.ExcelWriter(f"{maps_dosya_adi}.xlsx", engine="openpyxl") as writer:
+                    df_degerlendirmeler.to_excel(writer, sheet_name="Değerlendirme", index=False)
+
+
 
 streamlit_app()
