@@ -17,7 +17,7 @@ Stable sürümünün altındaki chromedriver lardan işletim sisteminize uygun v
 
 Koddaki chrome_driver_path değişkeni, bu dosyanın tam yolunu göstermelidir. 
 MACOS Örneği : chrome_driver_path = "/Users/erenates/Drivers/chromedriver"
-WINDOWS Örneği : chrome_driver_path = "C:\\Users\\erenates\\Drivers\\chromedriver.exe"
+WINDOWS Örneği : chrome_driver_path = r"C:\Users\erenates\Drivers\chromedriver.exe"
 
 
 Önemli Uyarı – ChromeDriver Güncelliği
@@ -29,3 +29,5 @@ https://googlechromelabs.github.io/chrome-for-testing
 Kod dosyanız ile logo.jpg görseli aynı klasörde bulunmalıdır.
 
 Aksi takdirde uygulama, logoyu yükleyemez ve hata verebilir.
+
+Veri anailz sekmesinde yukleyeceginiz excel tablosunun icinde "yorum" baslikli sutun olmasi yeterlidir
