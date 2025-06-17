@@ -21,7 +21,7 @@ maps_html_doc=None
 yorum_cekilecek_yer=None
 maps_degerlendirme_objeleri:List[BeautifulSoup]=[]
 maps_filtrelenmemis_degerlendirme_objeleri:List[BeautifulSoup]=[]
-maps_soru_cevap_objeleri:List[BeautifulSoup]=[]
+maps_soru_cevap_objeleri=[]
 maps_sorular=[]
 maps_cevaplar=[]
 maps_degerlendirme_yorumlari=[]
@@ -67,7 +67,11 @@ def driverOlustur():
     options=Options()
     options.add_experimental_option("detach",True)
     #options.add_argument("--headless")
+    #options.add_argument("--start-maximized")
+
     driver=webdriver.Chrome(service=service,options=options)
+    driver.set_window_size(1200, 650)
+
     return driver
 
 
@@ -171,6 +175,9 @@ def degerlendirmeListesiOlusturma():
         time.sleep(1.5)
 
         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+
         time.sleep(1.5)
 
     html_doc=driver.page_source
@@ -426,23 +433,29 @@ def mapsTarihleriYuklemek():
         maps_degerlendirme_tarihleri.append(yeni_degerlendirme_tarihi)
 
 def mapsSoruCevapYuklemek():
+    global maps_soru_cevap_objeleri
     driver.find_elements(By.CSS_SELECTOR, ".hh2c6")[1].click()
     time.sleep(1)
     driver.find_elements(By.CSS_SELECTOR, ".hh2c6")[0].click()
     time.sleep(1)
     driver.find_element(By.CSS_SELECTOR, "button[aria-label='Diğer sorular']").click()
     time.sleep(1)
+    driver.refresh()
+    time.sleep(1)
+    body=driver.find_element(By.CLASS_NAME,'.w6VYqd')
+    body.send_keys(Keys.PAGE_DOWN)
+    time.sleep(1)
 
-    soru_cevap_html_doc=driver.page_source
-    soup=BeautifulSoup(soru_cevap_html_doc,"html.parser")
+    # soru_cevap_html_doc=driver.page_source
+    # soup=BeautifulSoup(soru_cevap_html_doc,"html.parser")
 
-    maps_soru_cevap_objeleri.extend(soup.select(".Wde6Oe"))
-    for soru_cevap_objesi in maps_soru_cevap_objeleri:
-        soru=soru_cevap_objesi.select_one(".NXtIPd").text
-        cevap=soru_cevap_objesi.select_one(".Uz0Pqe").text
-        maps_sorular.append(soru)
-        maps_cevaplar.append(cevap)
-    st.write(len(maps_soru_cevap_objeleri))
+    # maps_soru_cevap_objeleri = driver.find_elements(By.CSS_SELECTOR, ".Wde6Oe")
+    # for soru_cevap_objesi in maps_soru_cevap_objeleri:
+    #     soru=soru_cevap_objesi.find_element(By.CSS_SELECTOR,".NXtIPd").text
+    #     cevap=soru_cevap_objesi.find_element(By.CSS_SELECTOR,".Uz0Pqe").text
+    #     maps_sorular.append(soru)
+    #     maps_cevaplar.append(cevap)
+    st.write(driver.find_element(By.CSS_SELECTOR,'DIFKq'))
     
     
 
@@ -895,37 +908,37 @@ def streamlit_app():
         if st.button("Veri Çekimini Başlat", key="maps_analiz_buton",use_container_width=True, type="primary"):
 
             with st.spinner("Analiz Ediliyor"):
-                # mapsDriverOlusturSC()
-                # time.sleep(2)
-                # mapsSoruCevapYuklemek()
-                # driver.quit()
+                mapsDriverOlusturSC()
+                time.sleep(2)
+                mapsSoruCevapYuklemek()
+                driver.quit()
 
-                mapsDriverOlustur()
-                mapsDegerlendirmeYukleme()
-                mapsYorumlariYuklemek()
-                mapsPuanlariYuklemek()
-                mapsYanitlariYuklemek()
-                mapsIsimleriYuklemek()
-                mapsTarihleriYuklemek()
+                # mapsDriverOlustur()
+                # mapsDegerlendirmeYukleme()
+                # mapsYorumlariYuklemek()
+                # mapsPuanlariYuklemek()
+                # mapsYanitlariYuklemek()
+                # mapsIsimleriYuklemek()
+                # mapsTarihleriYuklemek()
                 driver.quit()
 
                 st.success(f"Çekim başarılı şekilde tamamlanmıştır, toplam çekilen değerlendirme sayısı:{len(maps_filtrelenmemis_degerlendirme_objeleri) }, Yorumlu değerlendirme sayısı: {len(maps_degerlendirme_objeleri)}")
 
-                # simdi excel sablonu olusturayim 
-                df_degerlendirmeler = pd.DataFrame({
-                "İsim": maps_degerlendirme_isimleri,
-                "Puan": maps_degerlendirme_puanlari,
-                "Yorum": maps_degerlendirme_yorumlari,
-                "Yanıt": maps_degerlendirme_yanitlari,
-                "Tarih": maps_degerlendirme_tarihleri
-                })
+                # # simdi excel sablonu olusturayim 
+                # df_degerlendirmeler = pd.DataFrame({
+                # "İsim": maps_degerlendirme_isimleri,
+                # "Puan": maps_degerlendirme_puanlari,
+                # "Yorum": maps_degerlendirme_yorumlari,
+                # "Yanıt": maps_degerlendirme_yanitlari,
+                # "Tarih": maps_degerlendirme_tarihleri
+                # })
 
                 # df_soru_cevaplar = pd.DataFrame({
                 # "Soru": maps_sorular,
                 # "Cevap": maps_cevaplar
                 # })
-                with pd.ExcelWriter(f"{maps_dosya_adi}.xlsx", engine="openpyxl") as writer:
-                    df_degerlendirmeler.to_excel(writer, sheet_name="Değerlendirme", index=False)
+                # with pd.ExcelWriter(f"{maps_dosya_adi}.xlsx", engine="openpyxl") as writer:
+                #     df_degerlendirmeler.to_excel(writer, sheet_name="Değerlendirme", index=False)
 
 
 
