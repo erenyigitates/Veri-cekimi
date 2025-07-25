@@ -70,17 +70,24 @@ def driverOlustur():
     #options.add_argument("--start-maximized")
 
     driver=webdriver.Chrome(service=service,options=options)
-    #driver.set_window_size(1200, 650)
+    driver.set_window_size(1200, 650)
 
     return driver
 
 
-def urlTopla():
+def urlTopla(): # bu kisima bak
     global driver
     global degerlendirme_url  
     global soru_cevap_url
-    degerlendirme_url=driver.find_element(By.CLASS_NAME,"rvw-cnt").find_element(By.TAG_NAME,"a").get_attribute("href")
-    soru_cevap_url=driver.find_element(By.CLASS_NAME,"product-questions").get_attribute("href")
+    global urun_yorum_sayisi
+    global urun_soru_sayisi
+    degerlendirme_url = driver.find_element(By.CSS_SELECTOR, "a[data-testid='review-info-link']").get_attribute("href")
+    soru_cevap_url = driver.find_element(By.CSS_SELECTOR, "a[data-testid='questions-summary-link']").get_attribute("href")
+    urun_yorum_sayisi=48 #BURAYA URUN YORUM SAYISI
+    urun_soru_sayisi=16 #BURAYA URUN SORU SAYISI
+    
+
+
 
 def urunBilgileriTopla():
     global driver
@@ -97,32 +104,34 @@ def urunBilgileriTopla():
     
     html_doc=driver.page_source
     soup=BeautifulSoup(html_doc,"html.parser")
-    if len(soup.select(".pr-new-br span"))>1:
-        urun_ismi=soup.select(".pr-new-br span")[0].text.strip()+" "+soup.select(".pr-new-br span")[1].text.strip()
-    else:
-        urun_ismi=soup.select_one(".product-brand-name-with-link").text.strip()+" "+soup.select(".pr-new-br span")[0].text.strip()
+    
+    # if len(soup.select(".pr-new-br span"))>1:
+    #     urun_ismi=soup.select(".pr-new-br span")[0].text.strip()+" "+soup.select(".pr-new-br span")[1].text.strip()
+    # else:
+    #     urun_ismi=soup.select_one(".product-brand-name-with-link").text.strip()+" "+soup.select(".pr-new-br span")[0].text.strip()
 
-    urun_fiyati=soup.select_one(".pr-bx-nm.with-org-prc").select_one(".prc-dsc").text.strip()
-    urun_puani=soup.find(class_="value").text
-    urun_degerlendirme_sayisi=int(soup.select_one(".total-review-count").text)
-    urun_yorum_sayisi=int(soup.select_one(".p-reviews-comment-count").text.split(" ")[0])
-    urun_soru_sayisi=int(soup.select_one(".answered-questions-count").text)
+    #urun_fiyati=soup.select_one(".pr-bx-nm.with-org-prc").select_one(".prc-dsc").text.strip()
+    #urun_puani=soup.find(class_="value").text
+    #urun_degerlendirme_sayisi=int(soup.select_one(".total-review-count").text)
+    urun_yorum_sayisi = int(soup.select_one("span[data-testid='total-comments-desktop']").text.split(" ")[0])
 
-    urun_bilgi_bolumu=soup.select_one(".detail-desc-list").select("li")[5:]
-    for urun_bilgi in urun_bilgi_bolumu:
-        urun_bilgi_yazisi=urun_bilgi.text
-        urun_bilgileri2.append(urun_bilgi_yazisi)
-    urun_bilgileri.append("-".join(urun_bilgileri2))
+    #urun_soru_sayisi=int(soup.select_one(".answered-questions-count").text)
 
-    urunOzellikleri=soup.select(".detail-attr-container .detail-attr-item")
-    for urunOzelligi in urunOzellikleri:
-        keydegeri=urunOzelligi.select_one(".attr-name.attr-key-name-w")
-        valueDegeri=urunOzelligi.select_one("span[title]")
-        if keydegeri and valueDegeri:
-            keydegeri = keydegeri.string.strip()
-            valueDegeri = valueDegeri.get("title").strip()
-            urun_ozellikleri2.append(f"{keydegeri}:{valueDegeri}")
-    urun_ozellikleri.append(" - ".join(urun_ozellikleri2))
+    #urun_bilgi_bolumu=soup.select_one(".detail-desc-list").select("li")[5:]
+    #for urun_bilgi in urun_bilgi_bolumu:
+    #    urun_bilgi_yazisi=urun_bilgi.text
+    #    urun_bilgileri2.append(urun_bilgi_yazisi)
+    #urun_bilgileri.append("-".join(urun_bilgileri2))
+
+    # urunOzellikleri=soup.select(".detail-attr-container .detail-attr-item")
+    # for urunOzelligi in urunOzellikleri:
+    #     keydegeri=urunOzelligi.select_one(".attr-name.attr-key-name-w")
+    #     valueDegeri=urunOzelligi.select_one("span[title]")
+    #     if keydegeri and valueDegeri:
+    #         keydegeri = keydegeri.string.strip()
+    #         valueDegeri = valueDegeri.get("title").strip()
+    #         urun_ozellikleri2.append(f"{keydegeri}:{valueDegeri}")
+    # urun_ozellikleri.append(" - ".join(urun_ozellikleri2))
     
 
     
@@ -519,9 +528,9 @@ def streamlit_app():
                     driverOlustur()
                     driver.get(urun_url)
                     time.sleep(2)
-                    urunBilgileriTopla()
+                    #urunBilgileriTopla()
                     urlTopla()
-                    bilgi_df=bilgiDataFrameOlusturma(urun_ismi,urun_fiyati,urun_puani,urun_degerlendirme_sayisi,urun_yorum_sayisi,urun_soru_sayisi,urun_bilgileri,urun_ozellikleri)
+                    #bilgi_df=bilgiDataFrameOlusturma(urun_ismi,urun_fiyati,urun_puani,urun_degerlendirme_sayisi,urun_yorum_sayisi,urun_soru_sayisi,urun_bilgileri,urun_ozellikleri)
                     
                     if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="yeniden_eskiye"):
                         if(int(urun_yorum_sayisi)<=3030):
@@ -539,7 +548,7 @@ def streamlit_app():
                         
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df1.to_excel(writer, sheet_name="Yeniden Eskiye Yorumlar")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
                         
                     if (st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="eskiden_yeniye"):
@@ -557,7 +566,7 @@ def streamlit_app():
                         df2=yorumDataFrameOlusturma(eskiYorumlar,eskiPuanlar,eskiTarihler,bilgiler_listesi)
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df2.to_excel(writer, sheet_name="Eskiden Yeniye Yorumlar")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
 
                     if(st.session_state.sayfa_secimi=="yorum" and st.session_state.filtre_secimi=="hepsi"):
@@ -587,7 +596,7 @@ def streamlit_app():
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df1.to_excel(writer, sheet_name="Yeniden Eskiye Yorumlar")
                             df2.to_excel(writer, sheet_name="Eskiden Yeniye Yorumlar")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
                     
 
@@ -603,7 +612,7 @@ def streamlit_app():
                         df=soruDataFrameOlusturma(sorular)
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df.to_excel(writer, sheet_name="Sorular")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
 
                     if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="eskiden_yeniye"):
@@ -618,7 +627,7 @@ def streamlit_app():
                         df=soruDataFrameOlusturma(sorular)
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df.to_excel(writer, sheet_name="Sorular")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
 
                     if (st.session_state.sayfa_secimi=="soru_cevap" and st.session_state.filtre_secimi=="hepsi"):
@@ -643,7 +652,7 @@ def streamlit_app():
                         with pd.ExcelWriter(f"{dosya_adi}.xlsx") as writer:
                             df1.to_excel(writer, sheet_name="Yeniden Eskiye Sorular")
                             df2.to_excel(writer, sheet_name="Eskiden Yeniye Sorular")
-                            bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
+                            #bilgi_df.to_excel(writer, sheet_name="Ürün Bilgileri")
                         driver.quit()
 
             else:
