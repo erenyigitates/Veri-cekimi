@@ -70,7 +70,7 @@ def driverOlustur():
     #options.add_argument("--start-maximized")
 
     driver=webdriver.Chrome(service=service,options=options)
-    driver.set_window_size(1200, 650)
+    #driver.set_window_size(1200, 650)
 
     return driver
 
@@ -908,37 +908,37 @@ def streamlit_app():
         if st.button("Veri Çekimini Başlat", key="maps_analiz_buton",use_container_width=True, type="primary"):
 
             with st.spinner("Analiz Ediliyor"):
-                mapsDriverOlusturSC()
-                time.sleep(2)
-                mapsSoruCevapYuklemek()
-                driver.quit()
+                # mapsDriverOlusturSC()
+                # time.sleep(2)
+                # mapsSoruCevapYuklemek()
+                # driver.quit()
 
-                # mapsDriverOlustur()
-                # mapsDegerlendirmeYukleme()
-                # mapsYorumlariYuklemek()
-                # mapsPuanlariYuklemek()
-                # mapsYanitlariYuklemek()
-                # mapsIsimleriYuklemek()
-                # mapsTarihleriYuklemek()
+                mapsDriverOlustur()
+                mapsDegerlendirmeYukleme()
+                mapsYorumlariYuklemek()
+                mapsPuanlariYuklemek()
+                mapsYanitlariYuklemek()
+                mapsIsimleriYuklemek()
+                mapsTarihleriYuklemek()
                 driver.quit()
 
                 st.success(f"Çekim başarılı şekilde tamamlanmıştır, toplam çekilen değerlendirme sayısı:{len(maps_filtrelenmemis_degerlendirme_objeleri) }, Yorumlu değerlendirme sayısı: {len(maps_degerlendirme_objeleri)}")
 
-                # # simdi excel sablonu olusturayim 
-                # df_degerlendirmeler = pd.DataFrame({
-                # "İsim": maps_degerlendirme_isimleri,
-                # "Puan": maps_degerlendirme_puanlari,
-                # "Yorum": maps_degerlendirme_yorumlari,
-                # "Yanıt": maps_degerlendirme_yanitlari,
-                # "Tarih": maps_degerlendirme_tarihleri
-                # })
+                # simdi excel sablonu olusturayim 
+                df_degerlendirmeler = pd.DataFrame({
+                "İsim": maps_degerlendirme_isimleri,
+                "Puan": maps_degerlendirme_puanlari,
+                "Yorum": maps_degerlendirme_yorumlari,
+                "Yanıt": maps_degerlendirme_yanitlari,
+                "Tarih": maps_degerlendirme_tarihleri
+                })
 
-                # df_soru_cevaplar = pd.DataFrame({
-                # "Soru": maps_sorular,
-                # "Cevap": maps_cevaplar
-                # })
-                # with pd.ExcelWriter(f"{maps_dosya_adi}.xlsx", engine="openpyxl") as writer:
-                #     df_degerlendirmeler.to_excel(writer, sheet_name="Değerlendirme", index=False)
+                df_soru_cevaplar = pd.DataFrame({
+                "Soru": maps_sorular,
+                "Cevap": maps_cevaplar
+                })
+                with pd.ExcelWriter(f"{maps_dosya_adi}.xlsx", engine="openpyxl") as writer:
+                    df_degerlendirmeler.to_excel(writer, sheet_name="Değerlendirme", index=False)
 
 
 
